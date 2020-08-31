@@ -11,12 +11,15 @@ class Window(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        window_width = 300
+        window_width = 150
+        window_height = 100
+        window_up = 1080-window_height-40
+        window_left = 1920-window_width
 
         self.setWindowTitle("Test Overlay")
         self.setWindowOpacity(0.5)
         self.setStyleSheet("background-color: black;")
-        self.setGeometry(1620, 970, window_width, 70) #width, height ,box width,box height
+        self.setGeometry(window_left, window_up, window_width, window_height) #width, height ,box width,box height
         self.setWindowFlag(Qt.FramelessWindowHint)
         self.setWindowFlag(Qt.WindowStaysOnTopHint)
 
@@ -28,13 +31,13 @@ class Window(QMainWindow):
         self.label_1.move(label1_width, 2)
         self.label_1.setAlignment(Qt.AlignCenter)
         
-        self.label_stored = QLabel("Stored: 0", self)
-        self.label_stored.setStyleSheet("color: white;")
-        self.label_stored.adjustSize()
-        self.label_stored.move(10, 10)
+        self.label_total = QLabel("Stored: 1", self)
+        self.label_total.move(10, 40)
+        self.label_total.setStyleSheet("color: white; ")
+        self.label_total.adjustSize()
 
-        self.label_Clip = QLabel("Control C: "+str(clipboard.paste()), self)
-        self.label_Clip.move(10, 40)
+        self.label_Clip = QLabel("Control C:\n"+"1. "+str(clipboard.paste()), self)
+        self.label_Clip.move(10, 60)
         self.label_Clip.setStyleSheet("color: white; ")
         self.label_Clip.adjustSize()
         self.show()
@@ -70,12 +73,14 @@ def ui(in_q):
         data = in_q.get()
         dtypes = data.split(":")
         if dtypes[0] == "NEWCOPY":
-            if len(dtypes[1]) > 40:
-                window.label_Clip.setText("1. "+dtypes[1][0:40]+"...")
+            if len(dtypes[1]) > 20:
+                window.label_Clip.setText("Control C:\n"+dtypes[1][0:20]+"...")
             else:
-                window.label_Clip.setText("1. "+dtypes[1][0:40])
+                window.label_Clip.setText("Control C:\n"+dtypes[1])
         else:
-            window.label_stored.setText("Stored: "+dtypes[1])
+            print("Other data type")
+            print(dtypes[1])
+            window.label_total.setText(dtypes[1])
         window.label_Clip.adjustSize()
         window.update()
 
@@ -84,7 +89,7 @@ def ui(in_q):
 
 
 
- 
+currentIndex = 0 
 
 def function_ctrla(num):
     print("Control A pressed")
@@ -93,29 +98,49 @@ def function_ctrla(num):
 def function_ctrlc(num):
     print("Control C pressed")
     global CURRENT_CLIP
-    if CURRENT_CLIP != clipboard.paste():
+    print(CURRENT_CLIP)
+    print(clipboard.paste())
+    if(clipboard.paste() != CURRENT_CLIP):
         prevCopies.insert(0, CURRENT_CLIP)
         CURRENT_CLIP = clipboard.paste()
-        q.put("NEWCOPY:"+CURRENT_CLIP)
-        q.put("STORE:"+str(len(prevCopies)))
+        q.put("NEWCOPY:1. "+CURRENT_CLIP)
+        q.put("STORED:Stored. "+str(len(prevCopies)+1))
+        currentIndex = 0
 
-def pasteHandle(num):
+def function_change_clipboard(num):
     try:
-        newPaste = prevCopies[num-1]
-        print(newPaste)
-        oldClip = clipboard.paste()
-        if not prevCopies.__contains__(oldClip):
-            prevCopies.insert(0, oldClip)
-        clipboard.copy(newPaste)
-        q.put("NEWCOPY:"+newPaste)
-        q.put("STORE:"+str(len(prevCopies)))
-        #paste()
+        newclip = prevCopies[num-1]
+        #print(newclip)
+        #prevCopies.pop(num-1)
+        global CURRENT_CLIP
+        if not CURRENT_CLIP in prevCopies:
+            #print("adding to list")
+            prevCopies.insert(0, CURRENT_CLIP)
+        CURRENT_CLIP = newclip
+        q.put("NEWCOPY:"+str(num)+". "+CURRENT_CLIP)
     except IndexError:
-        print("No Index here")
+        print("No clipboard at index "+str(num-1))
+
 
 def function_ctrl_v_num(num):
-    print(prevCopies[num-1])
-    pasteHandle(num)
+    function_change_clipboard(num)
+
+
+
+def function_ctrl_alt_up(num):
+    print("up pressed")
+    global currentIndex
+    if currentIndex > 1:
+        currentIndex = currentIndex - 1
+    function_change_clipboard(currentIndex)
+
+def function_ctrl_alt_down(num):
+    print("down pressed")
+    global currentIndex
+    if currentIndex < len(prevCopies):
+        currentIndex = currentIndex + 1
+    function_change_clipboard(currentIndex)
+   
 
 
 
@@ -141,6 +166,9 @@ KEY_COMBOS = {
 
     frozenset([Key.ctrl_l, Key.alt_l, KeyCode(vk=54)]): function_ctrl_v_num,
     frozenset([Key.ctrl_l, Key.alt_l, KeyCode(vk=102)]): function_ctrl_v_num,
+
+    frozenset([Key.ctrl_l, Key.alt_l, KeyCode(vk=38)]): function_ctrl_alt_up,
+    frozenset([Key.ctrl_l, Key.alt_l, KeyCode(vk=40)]): function_ctrl_alt_down,
 }
 
 pressed_vks = set()
@@ -174,6 +202,8 @@ def control(out_q):
         with Listener(on_press=on_press, on_release=on_release) as listener:
             listener.join()
 
+
+CURRENT_CLIP = clipboard.paste()
 q = Queue()
 t1 = Thread(target = control, args=(q,))
 t2 = Thread(target = ui, args=(q,))
